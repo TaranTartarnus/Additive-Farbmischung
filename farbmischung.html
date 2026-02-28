@@ -1,0 +1,400 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Additive Farbmischung – Licht</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@300;400;600&display=swap');
+
+    :root {
+      --r: 255; --g: 0; --b: 0;
+      --R: 255; --G: 255; --B: 255;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: #080a0f;
+      color: #e8eaf0;
+      font-family: 'DM Sans', sans-serif;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 2rem 1rem 3rem;
+      gap: 2.5rem;
+    }
+
+    header {
+      text-align: center;
+    }
+
+    header h1 {
+      font-family: 'Space Mono', monospace;
+      font-size: clamp(1.1rem, 3vw, 1.6rem);
+      letter-spacing: 0.08em;
+      color: #ffffff;
+      text-transform: uppercase;
+    }
+
+    header p {
+      margin-top: 0.5rem;
+      font-size: 0.9rem;
+      color: #7a8090;
+      font-weight: 300;
+      max-width: 480px;
+    }
+
+    /* ── Canvas-Bereich ── */
+    .stage {
+      position: relative;
+      width: min(420px, 90vw);
+      height: min(420px, 90vw);
+      border-radius: 50%;
+      background: #0d0f16;
+      box-shadow: 0 0 80px rgba(0,0,0,0.8), inset 0 0 40px rgba(0,0,0,0.5);
+      overflow: hidden;
+      flex-shrink: 0;
+    }
+
+    canvas {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+
+    /* ── Steuerung ── */
+    .controls {
+      display: flex;
+      flex-direction: column;
+      gap: 1.1rem;
+      width: min(420px, 90vw);
+    }
+
+    .channel {
+      display: grid;
+      grid-template-columns: 2.2rem 1fr 3.2rem;
+      align-items: center;
+      gap: 0.8rem;
+    }
+
+    .channel-label {
+      font-family: 'Space Mono', monospace;
+      font-size: 0.75rem;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+      text-align: center;
+      padding: 0.3rem 0.2rem;
+      border-radius: 4px;
+    }
+
+    .label-r { color: #ff4444; border: 1px solid #ff444440; background: #ff44440a; }
+    .label-g { color: #44ff88; border: 1px solid #44ff8840; background: #44ff880a; }
+    .label-b { color: #4488ff; border: 1px solid #4488ff40; background: #4488ff0a; }
+
+    .slider-track {
+      position: relative;
+      height: 6px;
+      border-radius: 3px;
+      background: #1a1d28;
+      cursor: pointer;
+    }
+
+    .slider-fill {
+      position: absolute;
+      top: 0; left: 0;
+      height: 100%;
+      border-radius: 3px;
+      transition: width 0.05s;
+      pointer-events: none;
+    }
+
+    input[type=range] {
+      position: absolute;
+      top: 50%; left: 0;
+      transform: translateY(-50%);
+      width: 100%;
+      height: 100%;
+      opacity: 0;
+      cursor: pointer;
+      margin: 0;
+    }
+
+    .value-display {
+      font-family: 'Space Mono', monospace;
+      font-size: 0.8rem;
+      text-align: right;
+      color: #9098b0;
+    }
+
+    /* ── Misch-Ergebnis ── */
+    .result-panel {
+      width: min(420px, 90vw);
+      background: #0d0f16;
+      border: 1px solid #1e2130;
+      border-radius: 12px;
+      padding: 1.2rem 1.4rem;
+      display: flex;
+      align-items: center;
+      gap: 1.2rem;
+    }
+
+    .result-swatch {
+      width: 54px;
+      height: 54px;
+      border-radius: 8px;
+      flex-shrink: 0;
+      border: 1px solid #1e2130;
+      transition: background 0.1s;
+      box-shadow: 0 0 20px var(--glow, transparent);
+    }
+
+    .result-info {
+      display: flex;
+      flex-direction: column;
+      gap: 0.3rem;
+    }
+
+    .result-label {
+      font-size: 0.75rem;
+      color: #5a6070;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      font-weight: 600;
+    }
+
+    .result-hex {
+      font-family: 'Space Mono', monospace;
+      font-size: 1.05rem;
+      color: #e0e4f0;
+    }
+
+    .result-name {
+      font-size: 0.85rem;
+      color: #9098b0;
+      font-weight: 300;
+    }
+
+    /* ── Info-Box ── */
+    .info {
+      width: min(420px, 90vw);
+      font-size: 0.78rem;
+      color: #4a5060;
+      line-height: 1.7;
+      border-top: 1px solid #1a1d28;
+      padding-top: 1rem;
+      text-align: center;
+    }
+
+    .info strong { color: #6a7080; }
+  </style>
+</head>
+<body>
+
+  <header>
+    <h1>Additive Farbmischung</h1>
+    <p>Mische farbiges Licht durch Überlagerung von Rot-, Grün- und Blaulicht.</p>
+  </header>
+
+  <div class="stage">
+    <canvas id="canvas"></canvas>
+  </div>
+
+  <!-- Rot -->
+  <div class="controls">
+    <div class="channel">
+      <span class="channel-label label-r">ROT</span>
+      <div class="slider-track" id="track-r">
+        <div class="slider-fill" id="fill-r"
+             style="width:100%; background: linear-gradient(to right, #1a1d28, #ff3333);"></div>
+        <input type="range" id="slider-r" min="0" max="255" value="255">
+      </div>
+      <span class="value-display" id="val-r">255</span>
+    </div>
+
+    <!-- Grün -->
+    <div class="channel">
+      <span class="channel-label label-g">GRÜN</span>
+      <div class="slider-track" id="track-g">
+        <div class="slider-fill" id="fill-g"
+             style="width:0%; background: linear-gradient(to right, #1a1d28, #44ff88);"></div>
+        <input type="range" id="slider-g" min="0" max="255" value="0">
+      </div>
+      <span class="value-display" id="val-g">0</span>
+    </div>
+
+    <!-- Blau -->
+    <div class="channel">
+      <span class="channel-label label-b">BLAU</span>
+      <div class="slider-track" id="track-b">
+        <div class="slider-fill" id="fill-b"
+             style="width:0%; background: linear-gradient(to right, #1a1d28, #4488ff);"></div>
+        <input type="range" id="slider-b" min="0" max="255" value="0">
+      </div>
+      <span class="value-display" id="val-b">0</span>
+    </div>
+  </div>
+
+  <!-- Ergebnis -->
+  <div class="result-panel">
+    <div class="result-swatch" id="swatch"></div>
+    <div class="result-info">
+      <span class="result-label">Mischfarbe</span>
+      <span class="result-hex" id="hex-out">#FF0000</span>
+      <span class="result-name" id="color-name">Rot</span>
+    </div>
+  </div>
+
+  <div class="info">
+    <strong>Additive Mischung:</strong> Jeder Kanal addiert Lichtintensität.<br>
+    Rot + Grün = Gelb &nbsp;·&nbsp; Rot + Blau = Magenta &nbsp;·&nbsp; Grün + Blau = Cyan<br>
+    Rot + Grün + Blau = Weißes Licht
+  </div>
+
+<script>
+  const canvas = document.getElementById('canvas');
+  const ctx = canvas.getContext('2d');
+
+  let R = 255, G = 0, B = 0;
+
+  // Canvas-Größe setzen
+  function resize() {
+    const size = canvas.parentElement.offsetWidth;
+    canvas.width = size;
+    canvas.height = size;
+    draw();
+  }
+
+  function draw() {
+    const W = canvas.width;
+    const H = canvas.height;
+    const cx = W / 2;
+    const cy = H / 2;
+    const radius = W * 0.28;
+    const offset = W * 0.13;
+
+    ctx.clearRect(0, 0, W, H);
+
+    // Drei Lichtkreise mit additivem Blending
+    ctx.globalCompositeOperation = 'lighter';
+
+    // Rot – oben
+    const gR = ctx.createRadialGradient(cx, cy - offset, 0, cx, cy - offset, radius * 1.4);
+    gR.addColorStop(0, `rgba(${R},0,0,0.95)`);
+    gR.addColorStop(0.6, `rgba(${R},0,0,0.5)`);
+    gR.addColorStop(1, `rgba(${R},0,0,0)`);
+    ctx.beginPath();
+    ctx.arc(cx, cy - offset, radius * 1.4, 0, Math.PI * 2);
+    ctx.fillStyle = gR;
+    ctx.fill();
+
+    // Grün – unten links
+    const gG = ctx.createRadialGradient(cx - offset * 0.9, cy + offset * 0.6, 0, cx - offset * 0.9, cy + offset * 0.6, radius * 1.4);
+    gG.addColorStop(0, `rgba(0,${G},0,0.95)`);
+    gG.addColorStop(0.6, `rgba(0,${G},0,0.5)`);
+    gG.addColorStop(1, `rgba(0,${G},0,0)`);
+    ctx.beginPath();
+    ctx.arc(cx - offset * 0.9, cy + offset * 0.6, radius * 1.4, 0, Math.PI * 2);
+    ctx.fillStyle = gG;
+    ctx.fill();
+
+    // Blau – unten rechts
+    const gB = ctx.createRadialGradient(cx + offset * 0.9, cy + offset * 0.6, 0, cx + offset * 0.9, cy + offset * 0.6, radius * 1.4);
+    gB.addColorStop(0, `rgba(0,0,${B},0.95)`);
+    gB.addColorStop(0.6, `rgba(0,0,${B},0.5)`);
+    gB.addColorStop(1, `rgba(0,0,${B},0)`);
+    ctx.beginPath();
+    ctx.arc(cx + offset * 0.9, cy + offset * 0.6, radius * 1.4, 0, Math.PI * 2);
+    ctx.fillStyle = gB;
+    ctx.fill();
+
+    ctx.globalCompositeOperation = 'source-over';
+
+    // Beschriftungen der Kreise
+    ctx.font = `bold ${W * 0.035}px 'Space Mono', monospace`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+
+    if (R > 20) {
+      ctx.fillStyle = `rgba(255,120,120,${Math.min(1, R / 255 * 1.2)})`;
+      ctx.fillText('R', cx, cy - offset * 2.1);
+    }
+    if (G > 20) {
+      ctx.fillStyle = `rgba(100,255,160,${Math.min(1, G / 255 * 1.2)})`;
+      ctx.fillText('G', cx - offset * 1.85, cy + offset * 1.4);
+    }
+    if (B > 20) {
+      ctx.fillStyle = `rgba(120,160,255,${Math.min(1, B / 255 * 1.2)})`;
+      ctx.fillText('B', cx + offset * 1.85, cy + offset * 1.4);
+    }
+  }
+
+  function toHex(v) {
+    return v.toString(16).padStart(2, '0').toUpperCase();
+  }
+
+  function getColorName(r, g, b) {
+    const max = Math.max(r, g, b);
+    if (max === 0) return 'Kein Licht (Schwarz)';
+    const nr = r / max, ng = g / max, nb = b / max;
+    const tol = 0.25;
+    if (nr > 1 - tol && ng > 1 - tol && nb > 1 - tol) return 'Weißes Licht';
+    if (nr > 1 - tol && ng > 1 - tol && nb < tol) return 'Gelb';
+    if (nr > 1 - tol && ng < tol && nb > 1 - tol) return 'Magenta';
+    if (nr < tol && ng > 1 - tol && nb > 1 - tol) return 'Cyan';
+    if (nr > 1 - tol && ng < tol && nb < tol) return 'Rot';
+    if (nr < tol && ng > 1 - tol && nb < tol) return 'Grün';
+    if (nr < tol && ng < tol && nb > 1 - tol) return 'Blau';
+    if (nr > 0.6 && ng > 0.6 && nb < 0.2) return 'Gelblich';
+    if (nr > 0.6 && ng < 0.2 && nb > 0.6) return 'Magentastich';
+    if (nr < 0.2 && ng > 0.6 && nb > 0.6) return 'Cyanstich';
+    return 'Mischfarbe';
+  }
+
+  function updateUI() {
+    const hexR = toHex(R), hexG = toHex(G), hexB = toHex(B);
+    const hex = `#${hexR}${hexG}${hexB}`;
+
+    document.getElementById('hex-out').textContent = hex;
+    document.getElementById('color-name').textContent = getColorName(R, G, B);
+
+    const swatch = document.getElementById('swatch');
+    swatch.style.background = hex;
+    const brightness = (R + G + B) / 3;
+    const glowColor = `rgba(${R},${G},${B},${Math.min(0.6, brightness / 255)})`;
+    swatch.style.setProperty('--glow', glowColor);
+    swatch.style.boxShadow = `0 0 18px ${glowColor}`;
+
+    draw();
+  }
+
+  function setupSlider(id, fillId, valId, colorVar) {
+    const slider = document.getElementById(id);
+    const fill = document.getElementById(fillId);
+    const valEl = document.getElementById(valId);
+
+    function update() {
+      const v = parseInt(slider.value);
+      const pct = (v / 255 * 100).toFixed(1) + '%';
+      fill.style.width = pct;
+      valEl.textContent = v;
+      if (id === 'slider-r') R = v;
+      else if (id === 'slider-g') G = v;
+      else B = v;
+      updateUI();
+    }
+
+    slider.addEventListener('input', update);
+  }
+
+  setupSlider('slider-r', 'fill-r', 'val-r');
+  setupSlider('slider-g', 'fill-g', 'val-g');
+  setupSlider('slider-b', 'fill-b', 'val-b');
+
+  window.addEventListener('resize', resize);
+  resize();
+  updateUI();
+</script>
+</body>
+</html>
